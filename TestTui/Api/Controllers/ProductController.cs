@@ -33,7 +33,7 @@ namespace Api.Controllers
             {
                 return Problem(ex.Message);
             }
-            catch (Exception ex)
+            catch (Exception )
             {
                 return Problem("Une Erreur est survenue lors de la récupération de la liste des produits.");
             }
@@ -55,7 +55,7 @@ namespace Api.Controllers
             {
                 return Problem(ex.Message);
             }
-            catch (Exception ex)
+            catch (Exception )
             {
                 return Problem("Une Erreur est survenue lors de la création d'un produit.");
             }
