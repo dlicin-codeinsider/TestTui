@@ -14,6 +14,38 @@ namespace Services.Tests
 {
     public class ServicesTest
     {
+        private Context InitContext()
+        {
+            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
+                .UseInMemoryDatabase(databaseName: "ProductDatabase")
+                .Options;
+
+            Context context = new Context(options);
+
+            return context;
+        }
+
+        private void DisposeContext(Context context)
+        {
+            context.Products.RemoveRange(context.Products);
+            context.SaveChanges();
+            context.Dispose();
+        }
+
+        private IProductService InitService(Context context)
+        {
+            var mappingConfig = new MapperConfiguration(cfg =>
+            {
+                cfg.AddProfile(new ProductMapper());
+            });
+
+            IMapper mapper = mappingConfig.CreateMapper();
+            IProductRepository repo = new ProductRepository(context);
+            IProductService service = new ProductService(mapper, repo);
+
+            return service;
+        }
+
         [Fact]
         public void GetAllProducts_Return_Filled_Products_List()
         {
@@ -37,63 +69,39 @@ namespace Services.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            using (Context context = new Context(options))
-            {
-                context.Add(product1);
-                context.Add(product2);
-                context.SaveChanges();
+            Context context = InitContext();
 
-                var mappingConfig = new MapperConfiguration(cfg =>
-                {
-                    cfg.AddProfile(new ProductMapper());
-                });
+            context.Add(product1);
+            context.Add(product2);
+            context.SaveChanges();
 
-                IMapper mapper = mappingConfig.CreateMapper();
-                IProductRepository repo = new ProductRepository(context);
-                IProductService service = new ProductService(mapper, repo);
-                
-                IEnumerable<ProductModel> result = service.GetAllProducts().Result;
+            IProductService service = InitService(context);
 
-                Assert.NotNull(result);
-                Assert.NotEmpty(result);
+            IEnumerable<ProductModel> result = service.GetAllProducts().Result;
 
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            Assert.NotNull(result);
+            Assert.NotEmpty(result);
+
+            DisposeContext(context);
         }
 
         [Fact]
         public void GetAllProducts_Return_Empty_Products_List()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
+            Context context = InitContext();
+            IProductService service = InitService(context);
 
-            using (Context context = new Context(options))
-            {
-                var mappingConfig = new MapperConfiguration(cfg =>
-                {
-                    cfg.AddProfile(new ProductMapper());
-                });
+            IEnumerable<ProductModel> result = service.GetAllProducts().Result;
 
-                IMapper mapper = mappingConfig.CreateMapper();
-                IProductRepository repo = new ProductRepository(context);
-                IProductService service = new ProductService(mapper, repo);
+            Assert.NotNull(result);
+            Assert.Empty(result);
 
-                IEnumerable<ProductModel> result = service.GetAllProducts().Result;
-
-                Assert.NotNull(result);
-                Assert.Empty(result);
-            }
+            DisposeContext(context);
         }
 
         [Fact]
         public void AddProduct_Correct_Input_Save_In_Context()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
             ProductModel product = new ProductModel()
             {
                 Code = "TEST",
@@ -102,23 +110,13 @@ namespace Services.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            using (Context context = new Context(options))
-            {
-                var mappingConfig = new MapperConfiguration(cfg =>
-                {
-                    cfg.AddProfile(new ProductMapper());
-                });
+            Context context = InitContext();
+            IProductService service = InitService(context);
 
-                IMapper mapper = mappingConfig.CreateMapper();
-                IProductRepository repo = new ProductRepository(context);
-                IProductService service = new ProductService(mapper, repo);
+            Assert.NotNull(service.AddProduct(product).Result);
+            Assert.True(context.Set<Product>().AnyAsync(x => x.Code == "TEST").Result);
 
-                Assert.NotNull(service.AddProduct(product).Result);
-                Assert.True(context.Set<Product>().AnyAsync(x => x.Code == "TEST").Result);
-
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            DisposeContext(context);
         }
 
         [Fact]
@@ -136,23 +134,13 @@ namespace Services.Tests
                 StartValidityDate = new DateTime(2021, 12, 31)
             };
 
-            using (Context context = new Context(options))
-            {
-                var mappingConfig = new MapperConfiguration(cfg =>
-                {
-                    cfg.AddProfile(new ProductMapper());
-                });
+            Context context = InitContext();
+            IProductService service = InitService(context);
 
-                IMapper mapper = mappingConfig.CreateMapper();
-                IProductRepository repo = new ProductRepository(context);
-                IProductService service = new ProductService(mapper, repo);
+            ProductException exception = Assert.ThrowsAsync<ProductException>(() => service.AddProduct(product)).Result;
+            Assert.Equal("La date de fin de validité est antérieure à la date de début de validité.", exception.Message);
 
-                ProductException exception = Assert.ThrowsAsync<ProductException>(() => service.AddProduct(product)).Result;
-                Assert.Equal("La date de fin de validité est antérieure à la date de début de validité.", exception.Message);
-
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            DisposeContext(context);
         }
 
         [Fact]
@@ -178,51 +166,28 @@ namespace Services.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            using (Context context = new Context(options))
-            {
-                context.Add(product);
-                context.SaveChanges();
+            Context context = InitContext();
 
-                var mappingConfig = new MapperConfiguration(cfg =>
-                {
-                    cfg.AddProfile(new ProductMapper());
-                });
+            context.Add(product);
+            context.SaveChanges();
 
-                IMapper mapper = mappingConfig.CreateMapper();
-                IProductRepository repo = new ProductRepository(context);
-                IProductService service = new ProductService(mapper, repo);
+            IProductService service = InitService(context);
 
-                ProductException exception = Assert.ThrowsAsync<ProductException>(() => service.AddProduct(productModel)).Result;
-                Assert.Equal($"Un produit avec le code {product.Code} existe déjà.", exception.Message);
+            ProductException exception = Assert.ThrowsAsync<ProductException>(() => service.AddProduct(productModel)).Result;
+            Assert.Equal($"Un produit avec le code {product.Code} existe déjà.", exception.Message);
 
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            DisposeContext(context);
         }
 
         [Fact]
         public void AddProduct_Null_Input_Throws_Exception()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
+            Context context = InitContext();
+            IProductService service = InitService(context);
 
-            using (Context context = new Context(options))
-            {
-                var mappingConfig = new MapperConfiguration(cfg =>
-                {
-                    cfg.AddProfile(new ProductMapper());
-                });
+            Assert.ThrowsAsync<Exception>(() => service.AddProduct(null));
 
-                IMapper mapper = mappingConfig.CreateMapper();
-                IProductRepository repo = new ProductRepository(context);
-                IProductService service = new ProductService(mapper, repo);
-
-                Assert.ThrowsAsync<Exception>(() => service.AddProduct(null));
-
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            DisposeContext(context);
         }
     }
 }

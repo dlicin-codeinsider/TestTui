@@ -10,6 +10,24 @@ namespace Repositories.Tests
 {
     public class RepositoriesTest
     {
+        private Context InitContext()
+        {
+            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
+                .UseInMemoryDatabase(databaseName: "ProductDatabase")
+                .Options;
+
+            Context context = new Context(options);
+
+            return context;
+        }
+
+        private void DisposeContext(Context context)
+        {
+            context.Products.RemoveRange(context.Products);
+            context.SaveChanges();
+            context.Dispose();
+        }
+
         [Fact]
         public void GetAllProducts_Return_Filled_Products_List()
         {
@@ -33,47 +51,38 @@ namespace Repositories.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            using (Context context = new Context(options))
-            {
-                context.Add(product1);
-                context.Add(product2);
-                context.SaveChanges();
+            Context context = InitContext();
 
-                IProductRepository repo = new ProductRepository(context);
-                IEnumerable<Product> result = repo.GetAllProducts().Result;
+            context.Add(product1);
+            context.Add(product2);
+            context.SaveChanges();
 
-                Assert.NotNull(result);
-                Assert.NotEmpty(result);
+            IProductRepository repo = new ProductRepository(context);
+            IEnumerable<Product> result = repo.GetAllProducts().Result;
 
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            Assert.NotNull(result);
+            Assert.NotEmpty(result);
+
+            DisposeContext(context);
         }
 
         [Fact]
         public void GetAllProducts_Return_Empty_Products_List()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
+            Context context = InitContext();
 
-            using (Context context = new Context(options))
-            {
-                IProductRepository repo = new ProductRepository(context);
-                IEnumerable<Product> result = repo.GetAllProducts().Result;
+            IProductRepository repo = new ProductRepository(context);
+            IEnumerable<Product> result = repo.GetAllProducts().Result;
 
-                Assert.NotNull(result);
-                Assert.Empty(result);
-            }
+            Assert.NotNull(result);
+            Assert.Empty(result);
+
+            DisposeContext(context);
         }
 
         [Fact]
         public void AddProduct_Correct_Input_Save_In_Context()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
             Product product = new Product()
             {
                 Code = "TEST",
@@ -82,39 +91,30 @@ namespace Repositories.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            using (Context context = new Context(options))
-            {
-                IProductRepository repo = new ProductRepository(context);
+            Context context = InitContext();
+            IProductRepository repo = new ProductRepository(context);
 
-                Assert.NotNull(repo.AddProduct(product).Result);
-                Assert.True(context.Set<Product>().AnyAsync(x => x.Code == "TEST").Result);
+            Assert.NotNull(repo.AddProduct(product).Result);
+            Assert.True(context.Set<Product>().AnyAsync(x => x.Code == "TEST").Result);
 
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            DisposeContext(context);
         }
 
         [Fact]
         public void AddProduct_Null_Input_Throws_Exception()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
+            Context context = InitContext();
 
-            using (Context context = new Context(options))
-            {
-                IProductRepository repo = new ProductRepository(context);
-                Assert.ThrowsAsync<AggregateException>(() => repo.AddProduct(null));
-            }
+            IProductRepository repo = new ProductRepository(context);
+
+            Assert.ThrowsAsync<AggregateException>(() => repo.AddProduct(null));
+
+            DisposeContext(context);
         }
 
         [Fact]
         public void GetProductByCode_Correct_Code_Input_Return_Product()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
             Product product = new Product()
             {
                 Code = "TEST",
@@ -123,29 +123,23 @@ namespace Repositories.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            using (Context context = new Context(options))
-            {
-                context.Add(product);
-                context.SaveChanges();
+            Context context = InitContext();
 
-                IProductRepository repo = new ProductRepository(context);
-                Product result = repo.GetProductByCode("TEST").Result;
+            context.Add(product);
+            context.SaveChanges();
 
-                Assert.NotNull(result);
-                Assert.Equal("TEST", result.Code);
+            IProductRepository repo = new ProductRepository(context);
+            Product result = repo.GetProductByCode("TEST").Result;
 
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            Assert.NotNull(result);
+            Assert.Equal("TEST", result.Code);
+
+            DisposeContext(context);
         }
 
         [Fact]
         public void GetProductByCode_Inexisting_Code_Input_Return_Null()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
             Product product = new Product()
             {
                 Code = "TEST",
@@ -154,28 +148,22 @@ namespace Repositories.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            using (Context context = new Context(options))
-            {
-                context.Add(product);
-                context.SaveChanges();
+            Context context = InitContext();
 
-                IProductRepository repo = new ProductRepository(context);
-                Product result = repo.GetProductByCode("TEST2").Result;
+            context.Add(product);
+            context.SaveChanges();
 
-                Assert.Null(result);
+            IProductRepository repo = new ProductRepository(context);
+            Product result = repo.GetProductByCode("TEST2").Result;
 
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            Assert.Null(result);
+
+            DisposeContext(context);
         }
 
         [Fact]
         public void GetProductByCode_Null_Input_Return_Null()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
             Product product = new Product()
             {
                 Code = "TEST",
@@ -184,19 +172,17 @@ namespace Repositories.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            using (Context context = new Context(options))
-            {
-                context.Add(product);
-                context.SaveChanges();
+            Context context = InitContext();
+            
+            context.Add(product);
+            context.SaveChanges();
 
-                IProductRepository repo = new ProductRepository(context);
-                Product result = repo.GetProductByCode(null).Result;
+            IProductRepository repo = new ProductRepository(context);
+            Product result = repo.GetProductByCode(null).Result;
 
-                Assert.Null(result);
+            Assert.Null(result);
 
-                context.Products.RemoveRange(context.Products);
-                context.SaveChanges();
-            }
+            DisposeContext(context);
         }
     }
 }
