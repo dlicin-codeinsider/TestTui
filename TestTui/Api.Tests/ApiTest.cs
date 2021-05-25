@@ -1,113 +1,77 @@
 using Api.Controllers;
-using AutoMapper;
-using Data;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Models;
-using Repositories.Implementations;
-using Repositories.Interfaces;
-using Services;
+using Moq;
 using Services.Interfaces;
-using Services.Mapper;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace Api.Tests
 {
     public class ApiTest
     {
-        private Context InitContext()
-        {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
-            Context context = new Context(options);
-
-            return context;
-        }
-
-        private void DisposeContext(Context context)
-        {
-            context.Products.RemoveRange(context.Products);
-            context.SaveChanges();
-            context.Dispose();
-        }
-
-        private ProductController InitController(Context context)
-        {
-            var mappingConfig = new MapperConfiguration(cfg =>
-            {
-                cfg.AddProfile(new ProductMapper());
-            });
-
-            IMapper mapper = mappingConfig.CreateMapper();
-            IProductRepository repo = new ProductRepository(context);
-            IProductService service = new ProductService(mapper, repo);
-            ProductController controller = new ProductController(service);
-
-            return controller;
-        }
-
         [Fact]
         public void GetAllProducts_Return_Filled_Products_List()
         {
-            Product product1 = new Product()
+            // Arrange
+            IProductService service = Mock.Of<IProductService>();
+            Mock.Get(service).Setup(x => x.GetAllProducts()).ReturnsAsync(new List<ProductModel>
             {
-                Code = "TEST1",
-                EndValidityDate = new DateTime(2021, 12, 31),
-                Name = "TEST1",
-                StartValidityDate = new DateTime(2021, 1, 1)
-            };
+                new ProductModel
+                {
+                    Code = "TEST",
+                    EndValidityDate = new DateTime(2021, 12, 31),
+                    Id = 1,
+                    Name = "TEST",
+                    StartValidityDate = new DateTime(2021, 1, 1)
+                },
+                new ProductModel
+                {
+                    Code = "TEST2",
+                    EndValidityDate = new DateTime(2021, 12, 31),
+                    Id = 2,
+                    Name = "TEST2",
+                    StartValidityDate = new DateTime(2021, 1, 1)
+                }
+            });
 
-            Product product2 = new Product()
-            {
-                Code = "TEST2",
-                EndValidityDate = new DateTime(2021, 12, 31),
-                Name = "TEST2",
-                StartValidityDate = new DateTime(2021, 1, 1)
-            };
+            ProductController controller = new ProductController(service);
 
-            Context context = InitContext();
-
-            context.Add(product1);
-            context.Add(product2);
-            context.SaveChanges();
-
-            ProductController controller = InitController(context);
-
+            // Act
             IActionResult result = controller.GetAllProducts().Result;
-            ObjectResult objectResult = result as ObjectResult;
 
+            // Assert
+            ObjectResult objectResult = Assert.IsType<OkObjectResult>(result);
             Assert.Equal(200, objectResult.StatusCode);
-            Assert.NotNull(objectResult.Value);
-            Assert.IsAssignableFrom<IEnumerable<ProductModel>>(objectResult.Value);
-            Assert.NotEmpty(objectResult.Value as IEnumerable<ProductModel>);
-
-            DisposeContext(context);
+            IEnumerable<ProductModel> objectResultValue = Assert.IsAssignableFrom<IEnumerable<ProductModel>>(objectResult.Value);
+            Assert.Equal(2, objectResultValue.Count());
         }
 
         [Fact]
         public void GetAllProducts_Return_Empty_Products_List()
         {
-            Context context = InitContext();
+            // Arrange
+            IProductService service = Mock.Of<IProductService>();
+            Mock.Get(service).Setup(x => x.GetAllProducts()).ReturnsAsync(new List<ProductModel>());
 
-            ProductController controller = InitController(context);
+            ProductController controller = new ProductController(service);
 
+            // Act
             IActionResult result = controller.GetAllProducts().Result;
-            ObjectResult objectResult = result as ObjectResult;
 
+            // Assert
+            ObjectResult objectResult = Assert.IsType<OkObjectResult>(result);
             Assert.Equal(200, objectResult.StatusCode);
-            Assert.IsAssignableFrom<IEnumerable<ProductModel>>(objectResult.Value);
-            Assert.Empty(objectResult.Value as IEnumerable<ProductModel>);
-
-            DisposeContext(context);
+            IEnumerable<ProductModel> objectResultValue = Assert.IsAssignableFrom<IEnumerable<ProductModel>>(objectResult.Value);
+            Assert.Empty(objectResultValue);
         }
 
         [Fact]
-        public void AddProduct_Correct_Input_Save_In_Context()
+        public void AddProduct_Correct_Input_Return_Product()
         {
+            // Arrange
             ProductModel product = new ProductModel()
             {
                 Code = "TEST",
@@ -116,48 +80,62 @@ namespace Api.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            Context context = InitContext();
-            ProductController controller = InitController(context);
+            ProductModel productResult = new ProductModel()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Id = 1,
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
 
+            IProductService service = Mock.Of<IProductService>();
+            Mock.Get(service).Setup(x => x.AddProduct(product)).ReturnsAsync(productResult);
+
+            ProductController controller = new ProductController(service);
+
+            // Act
             IActionResult result = controller.PostProduct(product).Result;
-            ObjectResult objectResult = result as ObjectResult;
 
+            // Assert
+            ObjectResult objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(201, objectResult.StatusCode);
-            Assert.NotNull(objectResult.Value);
-            Assert.IsType<ProductModel>(objectResult.Value);
-
-            DisposeContext(context);
+            ProductModel objectResultValue = Assert.IsType<ProductModel>(objectResult.Value);
+            Assert.Equal("TEST", objectResultValue.Code);
         }
 
         [Fact]
         public void AddProduct_Incorrect_Date_Rule_Return_Error_Message()
         {
+            // Arrange
             ProductModel product = new ProductModel()
             {
                 Code = "TEST",
-                EndValidityDate = new DateTime(2021, 1, 1),
+                EndValidityDate = new DateTime(2021, 12, 31),
                 Name = "TEST",
-                StartValidityDate = new DateTime(2021, 12, 31)
+                StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            Context context = InitContext();
-            ProductController controller = InitController(context);
+            IProductService service = Mock.Of<IProductService>();
+            Mock.Get(service).Setup(x => x.AddProduct(product)).Throws(new ProductException("La date de fin de validité est antérieure à la date de début de validité."));
 
+            ProductController controller = new ProductController(service);
+
+            // Act
             IActionResult result = controller.PostProduct(product).Result;
-            ObjectResult objectResult = result as ObjectResult;
 
+            // Assert
+            ObjectResult objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(500, objectResult.StatusCode);
-            Assert.NotNull(objectResult.Value);
-            Assert.IsType<ProblemDetails>(objectResult.Value);
-            Assert.Equal("La date de fin de validité est antérieure à la date de début de validité.", (objectResult.Value as ProblemDetails).Detail);
-
-            DisposeContext(context);
+            ProblemDetails objectResultValue = Assert.IsType<ProblemDetails>(objectResult.Value);
+            Assert.Equal("La date de fin de validité est antérieure à la date de début de validité.", objectResultValue.Detail);
         }
 
         [Fact]
         public void AddProduct_Code_Duplication_Return_Error_Message()
         {
-            ProductModel productModel = new ProductModel()
+            // Arrange
+            ProductModel product = new ProductModel()
             {
                 Code = "TEST",
                 EndValidityDate = new DateTime(2021, 12, 31),
@@ -165,47 +143,36 @@ namespace Api.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            Product product = new Product()
-            {
-                Code = "TEST",
-                EndValidityDate = new DateTime(2021, 12, 31),
-                Name = "TEST",
-                StartValidityDate = new DateTime(2021, 1, 1)
-            };
+            IProductService service = Mock.Of<IProductService>();
+            Mock.Get(service).Setup(x => x.AddProduct(product)).Throws(new ProductException($"Un produit avec le code {product.Code} existe déjà."));
 
+            ProductController controller = new ProductController(service);
 
-            Context context = InitContext();
-            context.Add(product);
-            context.SaveChanges();
+            // Act
+            IActionResult result = controller.PostProduct(product).Result;
 
-            ProductController controller = InitController(context);
-
-            IActionResult result = controller.PostProduct(productModel).Result;
-            ObjectResult objectResult = result as ObjectResult;
-
+            // Assert
+            ObjectResult objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(500, objectResult.StatusCode);
-            Assert.NotNull(objectResult.Value);
-            Assert.IsType<ProblemDetails>(objectResult.Value);
-            Assert.Equal($"Un produit avec le code {product.Code} existe déjà.", (objectResult.Value as ProblemDetails).Detail);
-
-            DisposeContext(context);
+            ProblemDetails objectResultValue = Assert.IsType<ProblemDetails>(objectResult.Value);
+            Assert.Equal($"Un produit avec le code {product.Code} existe déjà.", objectResultValue.Detail);
         }
 
         [Fact]
         public void AddProduct_Null_Input_Return_Error_Message()
         {
-            Context context = InitContext();
-            ProductController controller = InitController(context);
+            // Arrange
+            IProductService service = Mock.Of<IProductService>();
+            ProductController controller = new ProductController(service);
 
+            // Act
             IActionResult result = controller.PostProduct(null).Result;
-            ObjectResult objectResult = result as ObjectResult;
 
+            // Assert
+            ObjectResult objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(500, objectResult.StatusCode);
-            Assert.NotNull(objectResult.Value);
-            Assert.IsType<ProblemDetails>(objectResult.Value);
-            Assert.Equal("Le produit a ajouté est null.", (objectResult.Value as ProblemDetails).Detail);
-
-            DisposeContext(context);
+            ProblemDetails objectResultValue = Assert.IsType<ProblemDetails>(objectResult.Value);
+            Assert.Equal("Le produit a ajouté est null.", objectResultValue.Detail);
         }
     }
 }

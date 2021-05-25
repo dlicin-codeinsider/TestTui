@@ -1,108 +1,103 @@
 using AutoMapper;
 using Data;
-using Microsoft.EntityFrameworkCore;
 using Models;
-using Repositories.Implementations;
+using Moq;
 using Repositories.Interfaces;
 using Services.Interfaces;
-using Services.Mapper;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace Services.Tests
 {
     public class ServicesTest
     {
-        private Context InitContext()
-        {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
-            Context context = new Context(options);
-
-            return context;
-        }
-
-        private void DisposeContext(Context context)
-        {
-            context.Products.RemoveRange(context.Products);
-            context.SaveChanges();
-            context.Dispose();
-        }
-
-        private IProductService InitService(Context context)
-        {
-            var mappingConfig = new MapperConfiguration(cfg =>
-            {
-                cfg.AddProfile(new ProductMapper());
-            });
-
-            IMapper mapper = mappingConfig.CreateMapper();
-            IProductRepository repo = new ProductRepository(context);
-            IProductService service = new ProductService(mapper, repo);
-
-            return service;
-        }
-
         [Fact]
         public void GetAllProducts_Return_Filled_Products_List()
         {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
-            Product product1 = new Product()
+            // Arrange
+            IEnumerable<Product> productList = new List<Product>()
             {
-                Code = "TEST1",
-                EndValidityDate = new DateTime(2021, 12, 31),
-                Name = "TEST1",
-                StartValidityDate = new DateTime(2021, 1, 1)
+                new Product
+                {
+                    Code = "TEST",
+                    EndValidityDate = new DateTime(2021, 12, 31),
+                    Id = 1,
+                    Name = "TEST",
+                    StartValidityDate = new DateTime(2021, 1, 1)
+                },
+                new Product
+                {
+                    Code = "TEST2",
+                    EndValidityDate = new DateTime(2021, 12, 31),
+                    Id = 2,
+                    Name = "TEST2",
+                    StartValidityDate = new DateTime(2021, 1, 1)
+                }
             };
 
-            Product product2 = new Product()
+            IEnumerable<ProductModel> productModelList = new List<ProductModel>()
             {
-                Code = "TEST2",
-                EndValidityDate = new DateTime(2021, 12, 31),
-                Name = "TEST2",
-                StartValidityDate = new DateTime(2021, 1, 1)
+                new ProductModel
+                {
+                    Code = "TEST",
+                    EndValidityDate = new DateTime(2021, 12, 31),
+                    Id = 1,
+                    Name = "TEST",
+                    StartValidityDate = new DateTime(2021, 1, 1)
+                },
+                new ProductModel
+                {
+                    Code = "TEST2",
+                    EndValidityDate = new DateTime(2021, 12, 31),
+                    Id = 2,
+                    Name = "TEST2",
+                    StartValidityDate = new DateTime(2021, 1, 1)
+                }
             };
 
-            Context context = InitContext();
+            IProductRepository repo = Mock.Of<IProductRepository>();
+            Mock.Get(repo).Setup(x => x.GetAllProducts()).ReturnsAsync(productList);
 
-            context.Add(product1);
-            context.Add(product2);
-            context.SaveChanges();
+            IMapper mapper = Mock.Of<IMapper>();
+            Mock.Get(mapper).Setup(x => x.Map<IEnumerable<ProductModel>>(productList)).Returns(productModelList);
 
-            IProductService service = InitService(context);
+            IProductService service = new ProductService(mapper, repo);
 
+            // Act
             IEnumerable<ProductModel> result = service.GetAllProducts().Result;
 
+            // Assert
             Assert.NotNull(result);
-            Assert.NotEmpty(result);
-
-            DisposeContext(context);
+            Assert.Equal(2, result.Count());
         }
 
         [Fact]
         public void GetAllProducts_Return_Empty_Products_List()
         {
-            Context context = InitContext();
-            IProductService service = InitService(context);
+            // Arrange
+            IProductRepository repo = Mock.Of<IProductRepository>();
+            Mock.Get(repo).Setup(x => x.GetAllProducts()).ReturnsAsync(new List<Product>());
 
+            IMapper mapper = Mock.Of<IMapper>();
+            Mock.Get(mapper).Setup(x => x.Map<IEnumerable<ProductModel>>(new List<Product>())).Returns(new List<ProductModel>());
+
+            IProductService service = new ProductService(mapper, repo);
+
+            // Act
             IEnumerable<ProductModel> result = service.GetAllProducts().Result;
 
+            // Assert
             Assert.NotNull(result);
             Assert.Empty(result);
-
-            DisposeContext(context);
         }
 
         [Fact]
-        public void AddProduct_Correct_Input_Save_In_Context()
+        public void AddProduct_Correct_Input_Return_Product()
         {
-            ProductModel product = new ProductModel()
+            // Arrange
+            ProductModel productModel = new ProductModel()
             {
                 Code = "TEST",
                 EndValidityDate = new DateTime(2021, 12, 31),
@@ -110,50 +105,11 @@ namespace Services.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            Context context = InitContext();
-            IProductService service = InitService(context);
-
-            Assert.NotNull(service.AddProduct(product).Result);
-            Assert.True(context.Set<Product>().AnyAsync(x => x.Code == "TEST").Result);
-
-            DisposeContext(context);
-        }
-
-        [Fact]
-        public void AddProduct_Incorrect_Date_Rule_Throws_ProductException()
-        {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
-            ProductModel product = new ProductModel()
-            {
-                Code = "TEST",
-                EndValidityDate = new DateTime(2021, 1, 1),
-                Name = "TEST",
-                StartValidityDate = new DateTime(2021, 12, 31)
-            };
-
-            Context context = InitContext();
-            IProductService service = InitService(context);
-
-            ProductException exception = Assert.ThrowsAsync<ProductException>(() => service.AddProduct(product)).Result;
-            Assert.Equal("La date de fin de validité est antérieure à la date de début de validité.", exception.Message);
-
-            DisposeContext(context);
-        }
-
-        [Fact]
-        public void AddProduct_Code_Duplication_Throws_ProductException()
-        {
-            DbContextOptions<Context> options = new DbContextOptionsBuilder<Context>()
-                .UseInMemoryDatabase(databaseName: "ProductDatabase")
-                .Options;
-
-            ProductModel productModel = new ProductModel()
+            ProductModel productModelResult = new ProductModel()
             {
                 Code = "TEST",
                 EndValidityDate = new DateTime(2021, 12, 31),
+                Id = 1,
                 Name = "TEST",
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
@@ -166,28 +122,193 @@ namespace Services.Tests
                 StartValidityDate = new DateTime(2021, 1, 1)
             };
 
-            Context context = InitContext();
+            Product productResult = new Product()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Id = 1,
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
 
-            context.Add(product);
-            context.SaveChanges();
+            IProductRepository repo = Mock.Of<IProductRepository>();
+            Mock.Get(repo).Setup(x => x.AddProduct(product)).ReturnsAsync(productResult);
+            Mock.Get(repo).Setup(x => x.GetProductByCode("TEST")).ReturnsAsync((Product)null);
 
-            IProductService service = InitService(context);
+            IMapper mapper = Mock.Of<IMapper>();
+            Mock.Get(mapper).Setup(x => x.Map<Product>(productModel)).Returns(product);
+            Mock.Get(mapper).Setup(x => x.Map<ProductModel>(productResult)).Returns(productModelResult);
 
+            IProductService service = new ProductService(mapper, repo);
+
+            // Act
+            ProductModel result = service.AddProduct(productModel).Result;
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal("TEST", result.Code);
+        }
+
+        [Fact]
+        public void AddProduct_Incorrect_Date_Rule_Throws_ProductException()
+        {
+            // Arrange
+            ProductModel productModel = new ProductModel()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 1, 1),
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 12, 31)
+            };
+
+            ProductModel productModelResult = new ProductModel()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 1, 1),
+                Id = 1,
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 12, 31)
+            };
+
+            Product product = new Product()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 1, 1),
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 12, 31)
+            };
+
+            Product productResult = new Product()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 1, 1),
+                Id = 1,
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 12, 31)
+            };
+
+            IProductRepository repo = Mock.Of<IProductRepository>();
+            Mock.Get(repo).Setup(x => x.AddProduct(product)).ReturnsAsync(productResult);
+            Mock.Get(repo).Setup(x => x.GetProductByCode("TEST")).ReturnsAsync((Product)null);
+
+            IMapper mapper = Mock.Of<IMapper>();
+            Mock.Get(mapper).Setup(x => x.Map<Product>(productModel)).Returns(product);
+            Mock.Get(mapper).Setup(x => x.Map<ProductModel>(product)).Returns(productModel);
+
+            IProductService service = new ProductService(mapper, repo);
+
+            // Act
             ProductException exception = Assert.ThrowsAsync<ProductException>(() => service.AddProduct(productModel)).Result;
-            Assert.Equal($"Un produit avec le code {product.Code} existe déjà.", exception.Message);
 
-            DisposeContext(context);
+            // Assert
+            Assert.Equal("La date de fin de validité est antérieure à la date de début de validité.", exception.Message);
+        }
+
+        [Fact]
+        public void AddProduct_Code_Duplication_Throws_ProductException()
+        {
+            // Arrange
+            ProductModel productModel = new ProductModel()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
+
+            ProductModel productModelResult = new ProductModel()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Id = 1,
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
+
+            Product product = new Product()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
+
+            Product productResult = new Product()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Id = 1,
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
+
+            IProductRepository repo = Mock.Of<IProductRepository>();
+            Mock.Get(repo).Setup(x => x.AddProduct(product)).ReturnsAsync(productResult);
+            Mock.Get(repo).Setup(x => x.GetProductByCode("TEST")).ReturnsAsync(productResult);
+
+            IMapper mapper = Mock.Of<IMapper>();
+            Mock.Get(mapper).Setup(x => x.Map<Product>(productModel)).Returns(product);
+            Mock.Get(mapper).Setup(x => x.Map<ProductModel>(productResult)).Returns(productModelResult);
+
+            IProductService service = new ProductService(mapper, repo);
+
+            // Act
+            ProductException exception = Assert.ThrowsAsync<ProductException>(() => service.AddProduct(productModel)).Result;
+
+            // Assert
+            Assert.Equal($"Un produit avec le code {product.Code} existe déjà.", exception.Message);
         }
 
         [Fact]
         public void AddProduct_Null_Input_Throws_Exception()
         {
-            Context context = InitContext();
-            IProductService service = InitService(context);
+            // Arrange
+            ProductModel productModel = new ProductModel()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
 
+            ProductModel productModelResult = new ProductModel()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Id = 1,
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
+
+            Product product = new Product()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
+
+            Product productResult = new Product()
+            {
+                Code = "TEST",
+                EndValidityDate = new DateTime(2021, 12, 31),
+                Id = 1,
+                Name = "TEST",
+                StartValidityDate = new DateTime(2021, 1, 1)
+            };
+
+            IProductRepository repo = Mock.Of<IProductRepository>();
+            Mock.Get(repo).Setup(x => x.AddProduct(product)).ReturnsAsync(productResult);
+            Mock.Get(repo).Setup(x => x.GetProductByCode("TEST")).ReturnsAsync((Product)null);
+
+            IMapper mapper = Mock.Of<IMapper>();
+            Mock.Get(mapper).Setup(x => x.Map<Product>(productModel)).Returns(product);
+            Mock.Get(mapper).Setup(x => x.Map<ProductModel>(productResult)).Returns(productModelResult);
+
+            IProductService service = new ProductService(mapper, repo);
+
+            // Act
             Assert.ThrowsAsync<Exception>(() => service.AddProduct(null));
-
-            DisposeContext(context);
         }
     }
 }
