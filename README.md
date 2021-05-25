@@ -1,7 +1,7 @@
-# Test Tui
+# Test Api
 ## Context
 
-This project is a technical test for Tui.
+This project is a technical api test.
 
 
 ## How to run the project
